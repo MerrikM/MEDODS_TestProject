@@ -27,6 +27,10 @@ type RefreshTokenRequest struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
+type LogoutResponse struct {
+	Message string
+}
+
 const accessTokenTTL = time.Hour
 
 func NewAuthenticationHandler(authenticationService *service.AuthenticationService) *AuthenticationHandler {
@@ -64,7 +68,7 @@ func (handler *AuthenticationHandler) GetTokens(writer http.ResponseWriter, requ
 
 func (handler *AuthenticationHandler) GetCurrentUsersUUID(writer http.ResponseWriter, request *http.Request) {
 	claims, ok := request.Context().Value("user").(*security.Claims)
-	if !ok || claims == nil {
+	if ok == false || claims == nil {
 		http.Error(writer, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -110,6 +114,24 @@ func (handler *AuthenticationHandler) RefreshToken(writer http.ResponseWriter, r
 		AccessToken:  tokensPair.AccessToken,
 		RefreshToken: tokensPair.RefreshToken,
 	}
+
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(&response)
+}
+
+func (handler *AuthenticationHandler) Logout(writer http.ResponseWriter, request *http.Request) {
+	claims, ok := request.Context().Value("user").(*security.Claims)
+	if ok == false || claims == nil {
+		http.Error(writer, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := handler.AuthenticationService.Logout(request.Context(), claims.RefreshTokenUUID)
+	if err != nil {
+		http.Error(writer, "ошибка запроса", http.StatusBadRequest)
+		return
+	}
+	response := &LogoutResponse{Message: "выполнен выход из аккаунта"}
 
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(&response)

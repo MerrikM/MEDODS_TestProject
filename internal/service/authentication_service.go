@@ -78,3 +78,11 @@ func (service *AuthenticationService) RefreshToken(ctx context.Context, userAgen
 
 	return tokensPair, nil
 }
+
+func (service *AuthenticationService) Logout(ctx context.Context, refreshTokenUUID string) error {
+	err := service.JWTRepository.MarkRefreshTokenUsedByUUID(ctx, refreshTokenUUID)
+	if err != nil {
+		return fmt.Errorf("не удалось использовать токен: %w", err)
+	}
+	return nil
+}

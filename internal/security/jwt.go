@@ -2,6 +2,7 @@ package security
 
 import (
 	"MEDODS_TestProject/internal/model"
+	"MEDODS_TestProject/internal/repository"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -97,13 +98,13 @@ func ValidateJWT(jwtTokenStr string, secretKey []byte) (*Claims, error) {
 	return claims, nil
 }
 
-func JWTMiddleware(secretKey []byte) func(handler http.Handler) http.Handler {
+func JWTMiddleware(secretKey []byte, jwtRepository *repository.JWTRepository) func(handler http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(handleAuthentication(secretKey, next))
+		return http.HandlerFunc(handleAuthentication(secretKey, jwtRepository, next))
 	}
 }
 
-func handleAuthentication(secretKey []byte, next http.Handler) func(writer http.ResponseWriter, request *http.Request) {
+func handleAuthentication(secretKey []byte, jwtRepository *repository.JWTRepository, next http.Handler) func(writer http.ResponseWriter, request *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		authorizationHeader := request.Header.Get("Authorization")
 		if strings.HasPrefix(authorizationHeader, "Bearer ") == false {
@@ -117,6 +118,18 @@ func handleAuthentication(secretKey []byte, next http.Handler) func(writer http.
 		if err != nil {
 			log.Printf("невалидный токен: %v", err)
 			http.Error(writer, "невалидный токен", http.StatusUnauthorized)
+			return
+		}
+
+		refreshToken, err := jwtRepository.FindByUUID(request.Context(), claims.RefreshTokenUUID)
+		if err != nil {
+			log.Printf("рефреш токен не найден: %v", err)
+			http.Error(writer, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if refreshToken.Used == true {
+			log.Printf("рефреш токен был использован: %v", err)
+			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 

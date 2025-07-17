@@ -37,9 +37,10 @@ func main() {
 
 	router.Route("/api-auth", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
-			r.Use(security.JWTMiddleware(secretKey))
+			r.Use(security.JWTMiddleware(secretKey, jwtRepository))
 			r.Get("/me", authenticationHandler.GetCurrentUsersUUID)
 			r.Post("/refresh-token", authenticationHandler.RefreshToken)
+			r.Post("/logout", authenticationHandler.Logout)
 		})
 		r.Group(func(r chi.Router) {
 			r.Get("/get-tokens", authenticationHandler.GetTokens)
