@@ -5,6 +5,7 @@ import (
 	"MEDODS_TestProject/internal/handler"
 	"MEDODS_TestProject/internal/repository"
 	"MEDODS_TestProject/internal/security"
+	"MEDODS_TestProject/internal/service"
 	"context"
 	"github.com/go-chi/chi/v5"
 	_ "github.com/lib/pq"
@@ -31,12 +32,14 @@ func main() {
 	server, router := server.SetupServer()
 
 	jwtRepository := repository.NewJWTRepository(database)
-	authenticationHandler := handler.NewAuthenticationHandler(jwtRepository)
+	authenticationService := service.NewAuthenticationService(jwtRepository)
+	authenticationHandler := handler.NewAuthenticationHandler(authenticationService)
 
 	router.Route("/api-auth", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(security.JWTMiddleware(secretKey))
 			r.Get("/me", authenticationHandler.GetCurrentUsersUUID)
+			r.Post("/refresh-token", authenticationHandler.RefreshToken)
 		})
 		r.Group(func(r chi.Router) {
 			r.Get("/get-tokens", authenticationHandler.GetTokens)
