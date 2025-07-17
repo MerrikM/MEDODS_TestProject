@@ -1,6 +1,7 @@
 package security
 
 import (
+	"MEDODS_TestProject/config"
 	"MEDODS_TestProject/internal/model"
 	"MEDODS_TestProject/internal/repository"
 	"context"
@@ -22,32 +23,43 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-var secretKey = []byte("SECRET_KEY=4baeef081535397ee96f810e4c205acc7364f1a9cf94b4508d9a")
+type JWTService struct {
+	*config.Config
+}
 
-const accessTokenTTL = time.Hour
-const refreshTokenTTL = 10 * time.Hour
+func NewJWTService(cfg *config.Config) *JWTService {
+	return &JWTService{cfg}
+}
 
-func GenerateAccessRefreshTokens(userUUID string) (*model.TokensPair, *model.RefreshToken, error) {
+func (service *JWTService) GenerateAccessRefreshTokens(userUUID string) (*model.TokensPair, *model.RefreshToken, error) {
 	refreshToken, refreshTokenStr, err := GenerateRefreshToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("ошибка генерации рефреш токена: %w", err)
 	}
 
 	refreshToken.UserUUID = userUUID
-	refreshToken.ExpireAt = time.Now().Add(refreshTokenTTL)
+	timeDuration, err := time.ParseDuration(service.Config.JWT.RefreshTokenTTL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ошибка парсинга: %w", err)
+	}
+	refreshToken.ExpireAt = time.Now().Add(timeDuration)
 
+	timeDuration, err = time.ParseDuration(service.Config.JWT.AccessTokenTTL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ошибка парсинга: %w", err)
+	}
 	claims := Claims{
 		UserUUID:         userUUID,
 		RefreshTokenUUID: refreshToken.UUID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenTTL)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(timeDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "MEDODS_TestProject",
 		},
 	}
 
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	accessToken, err := jwtToken.SignedString(secretKey)
+	accessToken, err := jwtToken.SignedString([]byte(service.Config.JWT.SecretKey))
 	if err != nil {
 		return nil, nil, fmt.Errorf("ошибка подписи токена: %w", err)
 	}

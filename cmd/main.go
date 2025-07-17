@@ -1,6 +1,7 @@
 package main
 
 import (
+	"MEDODS_TestProject/config"
 	"MEDODS_TestProject/config/server"
 	"MEDODS_TestProject/internal/handler"
 	"MEDODS_TestProject/internal/repository"
@@ -17,27 +18,31 @@ import (
 	"time"
 )
 
-var secretKey = []byte("SECRET_KEY=4baeef081535397ee96f810e4c205acc7364f1a9cf94b4508d9a")
-
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	database, err := server.SetupDatabase()
+	cfg, err := config.LoadConfig("../config.yaml")
+	if err != nil {
+		log.Fatalf("ошибка загрузки конфигурации: %v", err)
+	}
+
+	database, err := server.SetupDatabase(cfg.Database.Driver, cfg.Database.ConnectionString)
 	if err != nil {
 		log.Fatalf("не удалось подключиться к БД: %v", err)
 	}
 	defer database.Close()
 
-	server, router := server.SetupServer()
+	srv, router := server.SetupServer(cfg.Server.Port)
 
 	jwtRepository := repository.NewJWTRepository(database)
-	authenticationService := service.NewAuthenticationService(jwtRepository)
+	jwtService := security.NewJWTService(cfg)
+	authenticationService := service.NewAuthenticationService(jwtRepository, cfg, jwtService)
 	authenticationHandler := handler.NewAuthenticationHandler(authenticationService)
 
 	router.Route("/api-auth", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
-			r.Use(security.JWTMiddleware(secretKey, jwtRepository))
+			r.Use(security.JWTMiddleware([]byte(cfg.JWT.SecretKey), jwtRepository))
 			r.Get("/me", authenticationHandler.GetCurrentUsersUUID)
 			r.Post("/refresh-token", authenticationHandler.RefreshToken)
 			r.Post("/logout", authenticationHandler.Logout)
@@ -47,7 +52,7 @@ func main() {
 		})
 	})
 
-	runServer(ctx, server)
+	runServer(ctx, srv)
 }
 
 func runServer(ctx context.Context, server *http.Server) {

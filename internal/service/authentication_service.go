@@ -1,6 +1,7 @@
 package service
 
 import (
+	"MEDODS_TestProject/config"
 	"MEDODS_TestProject/internal/model"
 	"MEDODS_TestProject/internal/notifier"
 	"MEDODS_TestProject/internal/repository"
@@ -14,17 +15,16 @@ import (
 
 type AuthenticationService struct {
 	*repository.JWTRepository
+	*config.Config
+	*security.JWTService
 }
 
-var secretKey = []byte("SECRET_KEY=4baeef081535397ee96f810e4c205acc7364f1a9cf94b4508d9a")
-var webhookurl = "https://webhook.site/673e03a4-b1bb-4546-88fa-9a521c61a1d0"
-
-func NewAuthenticationService(repo *repository.JWTRepository) *AuthenticationService {
-	return &AuthenticationService{repo}
+func NewAuthenticationService(repo *repository.JWTRepository, cfg *config.Config, service *security.JWTService) *AuthenticationService {
+	return &AuthenticationService{repo, cfg, service}
 }
 
 func (service *AuthenticationService) RefreshToken(ctx context.Context, userAgent string, ipAddress string, accessToken string, refreshToken string) (*model.TokensPair, error) {
-	claims, err := security.ValidateJWT(accessToken, secretKey)
+	claims, err := security.ValidateJWT(accessToken, []byte(service.Config.JWT.SecretKey))
 	if err != nil {
 		return nil, fmt.Errorf("не удалось провалидировать токен: %w", err)
 	}
@@ -49,7 +49,7 @@ func (service *AuthenticationService) RefreshToken(ctx context.Context, userAgen
 	if storedRefreshToken.IpAddress != ipAddress {
 		log.Printf("обнаружен вход с нового устройства, отправка webhook")
 		go func() {
-			if err := notifier.NotifyWebhook(webhookurl, userUUID, ipAddress, storedRefreshToken.IpAddress); err != nil {
+			if err := notifier.NotifyWebhook(service.Config.Webhook.URL, userUUID, ipAddress, storedRefreshToken.IpAddress); err != nil {
 				log.Printf("ошибка отправки webhook: %v", err)
 			}
 		}()
@@ -64,7 +64,7 @@ func (service *AuthenticationService) RefreshToken(ctx context.Context, userAgen
 		return nil, fmt.Errorf("не удалось использовать токен: %w", err)
 	}
 
-	tokensPair, newRefreshToken, err := security.GenerateAccessRefreshTokens(userUUID)
+	tokensPair, newRefreshToken, err := service.JWTService.GenerateAccessRefreshTokens(userUUID)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка генерации токенов: %w", err)
 	}
