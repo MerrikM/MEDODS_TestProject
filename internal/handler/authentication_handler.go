@@ -43,6 +43,8 @@ func (handler *AuthenticationHandler) GetTokens(writer http.ResponseWriter, requ
 		return
 	}
 
+	refreshToken.UserAgent = request.UserAgent()
+
 	err = handler.JWTRepository.SaveRefreshToken(request.Context(), refreshToken)
 	if err != nil {
 		log.Printf("ошибка сохранения рефреш токена: %v", err)
@@ -73,7 +75,15 @@ func (handler *AuthenticationHandler) GetCurrentUsersUUID(writer http.ResponseWr
 }
 
 func (handler *AuthenticationHandler) RefreshToken(writer http.ResponseWriter, request *http.Request) {
-	accessToken := strings.TrimPrefix(request.Header.Get("Authorization"), "Bearer ")
+	authHeader := request.Header.Get("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		http.Error(writer, "missing or invalid Authorization header", http.StatusUnauthorized)
+		return
+	}
+
+	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
+
+	userAgent := request.UserAgent()
 
 	var refreshTokenRequest RefreshTokenRequest
 	if err := json.NewDecoder(request.Body).Decode(&refreshTokenRequest); err != nil {
@@ -84,6 +94,7 @@ func (handler *AuthenticationHandler) RefreshToken(writer http.ResponseWriter, r
 
 	tokensPair, err := handler.AuthenticationService.RefreshToken(
 		request.Context(),
+		userAgent,
 		accessToken,
 		refreshTokenRequest.RefreshToken,
 	)

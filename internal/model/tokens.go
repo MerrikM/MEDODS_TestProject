@@ -8,6 +8,7 @@ type RefreshToken struct {
 	TokenHash string
 	ExpireAt  time.Time
 	Used      bool
+	UserAgent string
 }
 
 type TokensPair struct {

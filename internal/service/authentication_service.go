@@ -20,7 +20,7 @@ func NewAuthenticationService(repo *repository.JWTRepository) *AuthenticationSer
 	return &AuthenticationService{repo}
 }
 
-func (service *AuthenticationService) RefreshToken(ctx context.Context, accessToken string, refreshToken string) (*model.TokensPair, error) {
+func (service *AuthenticationService) RefreshToken(ctx context.Context, userAgent string, accessToken string, refreshToken string) (*model.TokensPair, error) {
 	claims, err := security.ValidateJWT(accessToken, secretKey)
 	if err != nil {
 		return nil, fmt.Errorf("не удалось провалидировать токен: %w", err)
@@ -39,6 +39,10 @@ func (service *AuthenticationService) RefreshToken(ctx context.Context, accessTo
 	if time.Now().After(storedRefreshToken.ExpireAt) {
 		return nil, fmt.Errorf("токен просрочен")
 	}
+	if storedRefreshToken.UserAgent != userAgent {
+		_ = service.JWTRepository.MarkRefreshTokenUsedByUUID(ctx, refreshTokenUUID)
+		return nil, fmt.Errorf("обновление токена запрещено. User-Agent был изменен")
+	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(storedRefreshToken.TokenHash), []byte(refreshToken))
 	if err != nil {
@@ -54,6 +58,7 @@ func (service *AuthenticationService) RefreshToken(ctx context.Context, accessTo
 		return nil, fmt.Errorf("ошибка генерации токенов: %w", err)
 	}
 
+	newRefreshToken.UserAgent = userAgent
 	err = service.JWTRepository.SaveRefreshToken(ctx, newRefreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("не удалось сохранить рефреш токен: %w", err)
