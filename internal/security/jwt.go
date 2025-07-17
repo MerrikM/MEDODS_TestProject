@@ -1,6 +1,7 @@
 package security
 
 import (
+	"MEDODS_TestProject/internal/model"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -15,29 +16,28 @@ import (
 )
 
 type Claims struct {
-	UserUUID         string `json:"user_id"`
+	UserUUID         string `json:"user_uuid"`
 	RefreshTokenUUID string `json:"refresh_token_id"`
 	jwt.RegisteredClaims
-}
-
-type TokensPair struct {
-	AccessToken  string
-	RefreshToken string
 }
 
 var secretKey = []byte("SECRET_KEY=4baeef081535397ee96f810e4c205acc7364f1a9cf94b4508d9a")
 
 const accessTokenTTL = time.Hour
+const refreshTokenTTL = 10 * time.Hour
 
-func GenerateAccessRefreshTokens(userUUID string) (*TokensPair, string, string, error) {
-	refreshToken, hashedToken, refreshUUID, err := GenerateRefreshToken()
+func GenerateAccessRefreshTokens(userUUID string) (*model.TokensPair, *model.RefreshToken, error) {
+	refreshToken, refreshTokenStr, err := GenerateRefreshToken()
 	if err != nil {
-		return nil, "", "", fmt.Errorf("ошибка генерации рефреш токена: %w", err)
+		return nil, nil, fmt.Errorf("ошибка генерации рефреш токена: %w", err)
 	}
+
+	refreshToken.UserUUID = userUUID
+	refreshToken.ExpireAt = time.Now().Add(refreshTokenTTL)
 
 	claims := Claims{
 		UserUUID:         userUUID,
-		RefreshTokenUUID: refreshUUID,
+		RefreshTokenUUID: refreshToken.UUID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -48,32 +48,36 @@ func GenerateAccessRefreshTokens(userUUID string) (*TokensPair, string, string, 
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
 	accessToken, err := jwtToken.SignedString(secretKey)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("ошибка подписи токена: %w", err)
+		return nil, nil, fmt.Errorf("ошибка подписи токена: %w", err)
 	}
 
-	return &TokensPair{
+	return &model.TokensPair{
 		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}, hashedToken, refreshUUID, nil
+		RefreshToken: refreshTokenStr,
+	}, refreshToken, nil
 }
 
-func GenerateRefreshToken() (string, string, string, error) {
+func GenerateRefreshToken() (*model.RefreshToken, string, error) {
 	jwtTokenBytes := make([]byte, 32)
 	_, err := rand.Read(jwtTokenBytes)
 	if err != nil {
-		return "", "", "", fmt.Errorf("ошибка генерации: %w", err)
+		return nil, "", fmt.Errorf("ошибка генерации: %w", err)
 	}
 	refreshUUID := uuid.New().String()
 	refreshTokenStr := base64.StdEncoding.EncodeToString(jwtTokenBytes)
 
 	hashedToken, err := bcrypt.GenerateFromPassword([]byte(refreshTokenStr), bcrypt.DefaultCost)
 	if err != nil {
-		return "", "", "", fmt.Errorf("ошибка хэширования: %w", err)
+		return nil, "", fmt.Errorf("ошибка хэширования: %w", err)
 	}
 
 	// refreshTokenStr отдается клиенту
 	// hashedToken сохраняется в БД
-	return refreshTokenStr, string(hashedToken), refreshUUID, nil
+	return &model.RefreshToken{
+		UUID:      refreshUUID,
+		TokenHash: string(hashedToken),
+		Used:      false,
+	}, refreshTokenStr, nil
 }
 
 func ValidateJWT(jwtTokenStr string, secretKey []byte) (*Claims, error) {

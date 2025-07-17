@@ -1,51 +1,56 @@
 package handler
 
 import (
-	"MEDODS_TestProject/internal/repository"
 	"MEDODS_TestProject/internal/security"
+	"MEDODS_TestProject/internal/service"
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
 type AuthenticationHandler struct {
-	*repository.JWTRepository
+	*service.AuthenticationService
 }
 
 type CurrentUserResponse struct {
 	UserGUID string `json:"userGUID"`
 }
 
-type TokensResponse struct {
+type TokensPair struct {
 	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
+}
+
+type RefreshTokenRequest struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
 const accessTokenTTL = time.Hour
 
-func NewAuthenticationHandler(jwtRepository *repository.JWTRepository) *AuthenticationHandler {
-	return &AuthenticationHandler{jwtRepository}
+func NewAuthenticationHandler(authenticationService *service.AuthenticationService) *AuthenticationHandler {
+	return &AuthenticationHandler{authenticationService}
 }
 
 func (handler *AuthenticationHandler) GetTokens(writer http.ResponseWriter, request *http.Request) {
 	guid := request.URL.Query().Get("guid")
 
-	tokensPair, hashedToken, _, err := security.GenerateAccessRefreshTokens(guid)
+	tokensPair, refreshToken, err := security.GenerateAccessRefreshTokens(guid)
 	if err != nil {
 		log.Printf("ошибка генерации токенов: %v", err)
 		http.Error(writer, "ошибка генерации токенов", http.StatusInternalServerError)
 		return
 	}
-	expireAt := time.Now().Add(accessTokenTTL)
-	err = handler.JWTRepository.SaveRefreshToken(request.Context(), guid, hashedToken, expireAt)
+
+	err = handler.JWTRepository.SaveRefreshToken(request.Context(), refreshToken)
 	if err != nil {
 		log.Printf("ошибка сохранения рефреш токена: %v", err)
 		http.Error(writer, "ошибка сохранения токена", http.StatusInternalServerError)
 		return
 	}
 
-	response := &TokensResponse{
+	response := &TokensPair{
 		AccessToken:  tokensPair.AccessToken,
 		RefreshToken: tokensPair.RefreshToken,
 	}
@@ -62,6 +67,36 @@ func (handler *AuthenticationHandler) GetCurrentUsersUUID(writer http.ResponseWr
 	}
 
 	response := &CurrentUserResponse{UserGUID: claims.UserUUID}
+
+	writer.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(writer).Encode(&response)
+}
+
+func (handler *AuthenticationHandler) RefreshToken(writer http.ResponseWriter, request *http.Request) {
+	accessToken := strings.TrimPrefix(request.Header.Get("Authorization"), "Bearer ")
+
+	var refreshTokenRequest RefreshTokenRequest
+	if err := json.NewDecoder(request.Body).Decode(&refreshTokenRequest); err != nil {
+		log.Printf("неверный json: %w", err)
+		http.Error(writer, "неверный json", http.StatusBadRequest)
+		return
+	}
+
+	tokensPair, err := handler.AuthenticationService.RefreshToken(
+		request.Context(),
+		accessToken,
+		refreshTokenRequest.RefreshToken,
+	)
+	if err != nil {
+		log.Printf("не удалось обновить токены: %v", err)
+		http.Error(writer, "не удалось обновить токены", http.StatusUnauthorized)
+		return
+	}
+
+	response := &TokensPair{
+		AccessToken:  tokensPair.AccessToken,
+		RefreshToken: tokensPair.RefreshToken,
+	}
 
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(&response)
