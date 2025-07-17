@@ -2,42 +2,78 @@ package security
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 )
 
 type Claims struct {
-	UserID   string `json:"user_id"`
-	Username string `json:"username"`
-	Roles    []string
+	UserUUID         string `json:"user_id"`
+	RefreshTokenUUID string `json:"refresh_token_id"`
 	jwt.RegisteredClaims
 }
 
-const secretKey = "SECRET_KEY=4baeef081535397ee96f810e4c205acc7364f1a9cf94b4508d9a"
+type TokensPair struct {
+	AccessToken  string
+	RefreshToken string
+}
 
-func GenerateWJT(userID string, username string, roles []string) (string, error) {
+var secretKey = []byte("SECRET_KEY=4baeef081535397ee96f810e4c205acc7364f1a9cf94b4508d9a")
+
+const accessTokenTTL = time.Hour
+
+func GenerateAccessRefreshTokens(userUUID string) (*TokensPair, string, string, error) {
+	refreshToken, hashedToken, refreshUUID, err := GenerateRefreshToken()
+	if err != nil {
+		return nil, "", "", fmt.Errorf("ошибка генерации рефреш токена: %w", err)
+	}
+
 	claims := Claims{
-		UserID:   userID,
-		Username: username,
-		Roles:    roles,
+		UserUUID:         userUUID,
+		RefreshTokenUUID: refreshUUID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "MEDODS_TestProject",
 		},
 	}
 
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
+	accessToken, err := jwtToken.SignedString(secretKey)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("ошибка подписи токена: %w", err)
+	}
 
-	return jwtToken.SignedString(secretKey)
+	return &TokensPair{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, hashedToken, refreshUUID, nil
 }
 
-func GenerateRefreshToken() (string, error) {
-	return uuid.NewString(), nil
+func GenerateRefreshToken() (string, string, string, error) {
+	jwtTokenBytes := make([]byte, 32)
+	_, err := rand.Read(jwtTokenBytes)
+	if err != nil {
+		return "", "", "", fmt.Errorf("ошибка генерации: %w", err)
+	}
+	refreshUUID := uuid.New().String()
+	refreshTokenStr := base64.StdEncoding.EncodeToString(jwtTokenBytes)
+
+	hashedToken, err := bcrypt.GenerateFromPassword([]byte(refreshTokenStr), bcrypt.DefaultCost)
+	if err != nil {
+		return "", "", "", fmt.Errorf("ошибка хэширования: %w", err)
+	}
+
+	// refreshTokenStr отдается клиенту
+	// hashedToken сохраняется в БД
+	return refreshTokenStr, string(hashedToken), refreshUUID, nil
 }
 
 func ValidateJWT(jwtTokenStr string, secretKey []byte) (*Claims, error) {
@@ -57,16 +93,16 @@ func ValidateJWT(jwtTokenStr string, secretKey []byte) (*Claims, error) {
 	return claims, nil
 }
 
-func JWTAuthorizationMiddleware(secretKey []byte) func(handler http.Handler) http.Handler {
+func JWTMiddleware(secretKey []byte) func(handler http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(handleAuthorization(secretKey, next))
+		return http.HandlerFunc(handleAuthentication(secretKey, next))
 	}
 }
 
-func handleAuthorization(secretKey []byte, next http.Handler) func(writer http.ResponseWriter, request *http.Request) {
+func handleAuthentication(secretKey []byte, next http.Handler) func(writer http.ResponseWriter, request *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		authorizationHeader := request.Header.Get("Authorization")
-		if strings.HasPrefix(authorizationHeader, "Bearer ") {
+		if strings.HasPrefix(authorizationHeader, "Bearer ") == false {
 			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -75,6 +111,7 @@ func handleAuthorization(secretKey []byte, next http.Handler) func(writer http.R
 
 		claims, err := ValidateJWT(jwtTokenStr, secretKey)
 		if err != nil {
+			log.Printf("невалидный токен: %v", err)
 			http.Error(writer, "невалидный токен", http.StatusUnauthorized)
 			return
 		}
