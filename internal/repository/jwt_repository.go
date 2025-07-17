@@ -18,7 +18,9 @@ func NewJWTRepository(database *internal.Database) *JWTRepository {
 }
 
 func (repository *JWTRepository) SaveRefreshToken(ctx context.Context, refreshToken *model.RefreshToken) error {
-	query := `INSERT INTO refresh_tokens (uuid, user_uuid, token_hash, expire_at, used, user_agent) VALUES ($1, $2, $3, $4, $5, $6)`
+	query := `INSERT INTO refresh_tokens (uuid, user_uuid, token_hash, expire_at, used, user_agent, ip_address) 
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
 
 	_, err := repository.DB.ExecContext(ctx, query,
 		refreshToken.UUID,
@@ -27,6 +29,7 @@ func (repository *JWTRepository) SaveRefreshToken(ctx context.Context, refreshTo
 		refreshToken.ExpireAt,
 		refreshToken.Used,
 		refreshToken.UserAgent,
+		refreshToken.IpAddress,
 	)
 
 	if err != nil {
@@ -56,7 +59,7 @@ func (repository *JWTRepository) MarkRefreshTokenUsedByUUID(ctx context.Context,
 }
 
 func (repository *JWTRepository) FindByUUID(ctx context.Context, refreshTokenUUID string) (*model.RefreshToken, error) {
-	query := `SELECT uuid, user_uuid, token_hash, expire_at, used, user_agent FROM refresh_tokens WHERE uuid = $1`
+	query := `SELECT uuid, user_uuid, token_hash, expire_at, used, user_agent, ip_address FROM refresh_tokens WHERE uuid = $1`
 
 	refreshToken := &model.RefreshToken{}
 
@@ -67,6 +70,7 @@ func (repository *JWTRepository) FindByUUID(ctx context.Context, refreshTokenUUI
 		&refreshToken.ExpireAt,
 		&refreshToken.Used,
 		&refreshToken.UserAgent,
+		&refreshToken.IpAddress,
 	)
 
 	if err != nil {

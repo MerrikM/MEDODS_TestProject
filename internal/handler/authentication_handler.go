@@ -44,6 +44,7 @@ func (handler *AuthenticationHandler) GetTokens(writer http.ResponseWriter, requ
 	}
 
 	refreshToken.UserAgent = request.UserAgent()
+	refreshToken.IpAddress = request.RemoteAddr
 
 	err = handler.JWTRepository.SaveRefreshToken(request.Context(), refreshToken)
 	if err != nil {
@@ -82,7 +83,7 @@ func (handler *AuthenticationHandler) RefreshToken(writer http.ResponseWriter, r
 	}
 
 	accessToken := strings.TrimPrefix(authHeader, "Bearer ")
-
+	ipAddress := request.RemoteAddr
 	userAgent := request.UserAgent()
 
 	var refreshTokenRequest RefreshTokenRequest
@@ -95,6 +96,7 @@ func (handler *AuthenticationHandler) RefreshToken(writer http.ResponseWriter, r
 	tokensPair, err := handler.AuthenticationService.RefreshToken(
 		request.Context(),
 		userAgent,
+		ipAddress,
 		accessToken,
 		refreshTokenRequest.RefreshToken,
 	)
