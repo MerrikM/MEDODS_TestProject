@@ -17,6 +17,8 @@ func NewJWTRepository(database *internal.Database) *JWTRepository {
 	return &JWTRepository{database}
 }
 
+// SaveRefreshToken сохраняет refresh-токен в базе данных
+// Возвращает ошибку, если операция не удалась
 func (repository *JWTRepository) SaveRefreshToken(ctx context.Context, refreshToken *model.RefreshToken) error {
 	query := `INSERT INTO refresh_tokens (uuid, user_uuid, token_hash, expire_at, used, user_agent, ip_address) 
 				VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -39,6 +41,8 @@ func (repository *JWTRepository) SaveRefreshToken(ctx context.Context, refreshTo
 	return nil
 }
 
+// MarkRefreshTokenUsedByUUID изменяет поле used, делая его равным true
+// Возвращает ошибку, если не получилось изменить поле
 func (repository *JWTRepository) MarkRefreshTokenUsedByUUID(ctx context.Context, refreshTokenUUID string) error {
 	query := `UPDATE refresh_tokens SET used = TRUE WHERE uuid = $1 AND used = FALSE`
 
@@ -58,6 +62,8 @@ func (repository *JWTRepository) MarkRefreshTokenUsedByUUID(ctx context.Context,
 	return nil
 }
 
+// FindByUUID ищет refresh-токен в базе данных
+// Возвращает модель model.RefreshToken или ошибку, если не удалось найти токен
 func (repository *JWTRepository) FindByUUID(ctx context.Context, refreshTokenUUID string) (*model.RefreshToken, error) {
 	query := `SELECT uuid, user_uuid, token_hash, expire_at, used, user_agent, ip_address FROM refresh_tokens WHERE uuid = $1`
 

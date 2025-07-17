@@ -23,6 +23,35 @@ func NewAuthenticationService(repo *repository.JWTRepository, cfg *config.Config
 	return &AuthenticationService{repo, cfg, service}
 }
 
+// RefreshToken обновляет refresh-токен
+// Выполняет следующие требования к операции refresh:
+//  1. Операцию refresh можно выполнить только той парой токенов, которая была выдана вместе.
+//  2. Запрещает операцию обновления токенов при изменении User-Agent.
+//     При этом, после неудачной попытки выполнения операции, деавторизует пользователя,
+//     который попытался выполнить обновление токенов.
+//  3. При попытке обновления токенов с нового IP отправляет POST-запрос на заданный webhook
+//     с информацией о попытке входа со стороннего IP. Запрещать операцию в данном случае не нужно.
+//
+// Параметры:
+//   - ctx: контекст выполнения (для отмены и таймаутов)
+//   - userAgent: информацию о бразуере
+//   - ipAddress: ip адрес устройства, с которого был выполнен вход
+//   - accessToken: текущий access-токен
+//   - refreshToken: текущий refresh-токен
+//
+// Пример:
+//
+//	tokensPair, err := handler.AuthenticationService.RefreshToken(
+//		request.Context(),
+//		"PostmanRuntime/7.44.1",
+//		"[::1]:52375",
+//		"your token",
+//		"your refresh token",
+//	 )
+//
+// Возвращает:
+//   - model.TokensPair
+//   - ошибку, если не удалось обновить токен.
 func (service *AuthenticationService) RefreshToken(ctx context.Context, userAgent string, ipAddress string, accessToken string, refreshToken string) (*model.TokensPair, error) {
 	claims, err := security.ValidateJWT(accessToken, []byte(service.Config.JWT.SecretKey))
 	if err != nil {
@@ -79,6 +108,19 @@ func (service *AuthenticationService) RefreshToken(ctx context.Context, userAgen
 	return tokensPair, nil
 }
 
+// Logout "деактивирует" пользователя.
+// Изменяет статус поля used у refresh-токена и делает его равным true
+//
+// Параметры:
+//   - ctx: контекст выполнения (для отмены и таймаутов)
+//   - refreshTokenUUID: UUID рефреш токена из базы даных
+//
+// Пример:
+//
+//	err := handler.AuthenticationService.Logout(ctx, "your refresh token uuid")
+//
+// Возвращает:
+//   - ошибку, если не удалось изменить поле used
 func (service *AuthenticationService) Logout(ctx context.Context, refreshTokenUUID string) error {
 	err := service.JWTRepository.MarkRefreshTokenUsedByUUID(ctx, refreshTokenUUID)
 	if err != nil {

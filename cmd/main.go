@@ -3,6 +3,7 @@ package main
 import (
 	"MEDODS_TestProject/config"
 	"MEDODS_TestProject/config/server"
+	_ "MEDODS_TestProject/docs"
 	"MEDODS_TestProject/internal/handler"
 	"MEDODS_TestProject/internal/repository"
 	"MEDODS_TestProject/internal/security"
@@ -10,6 +11,7 @@ import (
 	"context"
 	"github.com/go-chi/chi/v5"
 	_ "github.com/lib/pq"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +20,16 @@ import (
 	"time"
 )
 
+// @title Auth API Service
+// @version 1.0
+// @description REST API для аутентификации пользователей. Тестовое задание на позицию Junior Backend Developer
+
+// @host localhost:8090
+// @BasePath /api-auth
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -39,6 +51,8 @@ func main() {
 	jwtService := security.NewJWTService(cfg)
 	authenticationService := service.NewAuthenticationService(jwtRepository, cfg, jwtService)
 	authenticationHandler := handler.NewAuthenticationHandler(authenticationService)
+
+	router.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	router.Route("/api-auth", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
