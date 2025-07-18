@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"MEDODS_TestProject/internal/model"
 	"MEDODS_TestProject/internal/security"
 	"MEDODS_TestProject/internal/service"
 	"context"
@@ -18,19 +19,7 @@ type AuthenticationHandler struct {
 // CurrentUserResponse содержит строку с GUID(UUID) пользователя
 // swagger:model
 type CurrentUserResponse struct {
-	UserGUID string `json:"userGUID"`
-}
-
-// TokensPair содержит пару access и refresh токенов
-// swagger:model
-type TokensPair struct {
-	// Access токен (JWT)
-	// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-	AccessToken string `json:"accessToken"`
-
-	// Refresh токен (для получения новой пары)
-	// example: vcSi0369y1I62wOpxZFpgZ...
-	RefreshToken string `json:"refreshToken"`
+	UserGUID string `json:"userGUID" example:"123e4567-e89b-12d3-a456-426614174000"`
 }
 
 // RefreshTokenRequest содержит refresh токен в json формате
@@ -55,14 +44,15 @@ func NewAuthenticationHandler(authenticationService *service.AuthenticationServi
 
 // GetTokens генерирует и возвращает новую пару access/refresh токенов
 // @Summary Генерация токенов
-// @Description Создает новую пару JWT-токенов и сохраняет refresh-токен в БД
+// @Description Создает новую пару JWT-токенов и сохраняет refresh-токен в БД. Пример запроса: GET /api-auth/get-tokens?guid=123e4567-e89b-12d3-a456-426614174000
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Param guid query string true "GUID (UUID) пользователя"
-// @Success 200 {object} TokensPair
-// @Failure 400 {string} string "Неверный запрос"
-// @Failure 500 {string} string "Ошибка генерации или сохранения токенов"
+// @Param guid query string true "GUID (UUID) пользователя" example:"123e4567-e89b-12d3-a456-426614174000"
+// @Success 200 {object} model.TokensPair "успешный ответ" example:`{"access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", "refresh_token": "vcSi0369y1I62wOpxZFpgZ......"}`
+// @Failure 400 {string} string "невалидный или отсутствующий GUID"
+// @Failure 500 {string} string "ошибка генерации токенов"
+// @Failure 500 {string} string "ошибка сохранения refresh-токена"
 // @Security ApiKeyAuth
 // @Router /get-tokens [get]
 func (handler *AuthenticationHandler) GetTokens(writer http.ResponseWriter, request *http.Request) {
@@ -88,7 +78,7 @@ func (handler *AuthenticationHandler) GetTokens(writer http.ResponseWriter, requ
 		return
 	}
 
-	response := &TokensPair{
+	response := &model.TokensPair{
 		AccessToken:  tokensPair.AccessToken,
 		RefreshToken: tokensPair.RefreshToken,
 	}
@@ -99,12 +89,12 @@ func (handler *AuthenticationHandler) GetTokens(writer http.ResponseWriter, requ
 
 // GetCurrentUsersUUID godoc
 // @Summary Получение GUID (UUID) пользователя
-// @Description Извлекает GUID (UUID) пользователя из JWT-токена
+// @Description Извлекает GUID (UUID) пользователя из JWT-токена. Пример запроса: GET /api-auth/me с заголовком Authorization: Bearer <access_token>
 // @Tags Authentication
 // @Produce json
 // @Param Authorization header string true "Bearer токен" default(Bearer <access_token>)
-// @Success 200 {object} CurrentUserResponse
-// @Failure 401 {string} string "Пользователь не авторизован"
+// @Success 200 {object} CurrentUserResponse "Успешный ответ" example:`{"user_guid": "123e4567-e89b-12d3-a456-426614174000"}`
+// @Failure 401 {string} string "Пользователь не авторизован или токен недействителен" example:"не авторизован"
 // @Security ApiKeyAuth
 // @Router /me [get]
 func (handler *AuthenticationHandler) GetCurrentUsersUUID(writer http.ResponseWriter, request *http.Request) {
@@ -125,15 +115,16 @@ func (handler *AuthenticationHandler) GetCurrentUsersUUID(writer http.ResponseWr
 
 // RefreshToken обновляет access и refresh токены
 // @Summary Обновление токенов
-// @Description Обновляет пару JWT-токенов по refresh-токену с проверкой IP и User-Agent
+// @Description Обновляет пару JWT-токенов по refresh-токену с проверкой IP и User-Agent. Пример запроса: POST /api-auth/refresh-token с заголовком Authorization: Bearer <access_token> и телом {"refresh_token": "<refresh_token>"}
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param Authorization header string true "Access токен" default(Bearer <access_token>)
-// @Param request body RefreshTokenRequest true "Refresh токен в теле запроса"
-// @Success 200 {object} TokensPair
-// @Failure 400 {string} string "Неверный формат данных"
-// @Failure 401 {string} string "Недействительный токен"
+// @Param request body RefreshTokenRequest true "Refresh токен в теле запроса" example:`{"refresh_token": "vcSi0369y1I62wOpxZFpgZ......"}`
+// @Success 200 {object} model.TokensPair "успешное обновление токенов" example:`{"access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", "refresh_token": "vcSi0369y1I62wOpxZFpgZ......"}`
+// @Failure 400 {string} string "неверный JSON в теле запроса" example:"неверный json"
+// @Failure 401 {string} string "пустой или неверный заголовок Authorization" example:"пустой или неверный заголовок Authorization"
+// @Failure 401 {string} string "не удалось обновить токены" example:"не удалось обновить токены"
 // @Security ApiKeyAuth
 // @Router /refresh-token [post]
 func (handler *AuthenticationHandler) RefreshToken(writer http.ResponseWriter, request *http.Request) {
@@ -170,7 +161,7 @@ func (handler *AuthenticationHandler) RefreshToken(writer http.ResponseWriter, r
 		return
 	}
 
-	response := &TokensPair{
+	response := &model.TokensPair{
 		AccessToken:  tokensPair.AccessToken,
 		RefreshToken: tokensPair.RefreshToken,
 	}
@@ -181,14 +172,13 @@ func (handler *AuthenticationHandler) RefreshToken(writer http.ResponseWriter, r
 
 // Logout godoc
 // @Summary Выход из аккаунта
-// @Description Инвалидирует refresh-токен и завершает сеанс пользователя
+// @Description Инвалидирует refresh-токен и завершает сеанс пользователя. Пример запроса: POST /api-auth/logout с заголовком Authorization: Bearer <access_token>
 // @Tags Authentication
-// @Accept json
 // @Produce json
 // @Param Authorization header string true "Bearer токен" default(Bearer <access_token>)
-// @Success 200 {object} LogoutResponse
-// @Failure 400 {string} string "Ошибка при выполнении выхода"
-// @Failure 401 {string} string "Пользователь не авторизован"
+// @Success 200 {object} LogoutResponse "Успешный выход" example:`{"message": "выполнен выход из аккаунта"}`
+// @Failure 400 {string} string "ошибка запроса" example:"ошибка запроса"
+// @Failure 401 {string} string "пользователь не авторизован" example:"не авторизован"
 // @Security ApiKeyAuth
 // @Router /logout [post]
 func (handler *AuthenticationHandler) Logout(writer http.ResponseWriter, request *http.Request) {

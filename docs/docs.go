@@ -22,7 +22,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Создает новую пару JWT-токенов и сохраняет refresh-токен в БД",
+                "description": "Создает новую пару JWT-токенов и сохраняет refresh-токен в БД. Пример запроса: GET /api-auth/get-tokens?guid=123e4567-e89b-12d3-a456-426614174000",
                 "consumes": [
                     "application/json"
                 ],
@@ -44,19 +44,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "успешный ответ\" example:` + "`" + `{\"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\", \"refresh_token\": \"vcSi0369y1I62wOpxZFpgZ......\"}` + "`" + `",
                         "schema": {
-                            "$ref": "#/definitions/handler.TokensPair"
+                            "$ref": "#/definitions/model.TokensPair"
                         }
                     },
                     "400": {
-                        "description": "Неверный запрос",
+                        "description": "невалидный или отсутствующий GUID",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "500": {
-                        "description": "Ошибка генерации или сохранения токенов",
+                        "description": "ошибка сохранения refresh-токена",
                         "schema": {
                             "type": "string"
                         }
@@ -71,10 +71,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Инвалидирует refresh-токен и завершает сеанс пользователя",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Инвалидирует refresh-токен и завершает сеанс пользователя. Пример запроса: POST /api-auth/logout с заголовком Authorization: Bearer \u003caccess_token\u003e",
                 "produces": [
                     "application/json"
                 ],
@@ -94,19 +91,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Успешный выход\" example:` + "`" + `{\"message\": \"выполнен выход из аккаунта\"}` + "`" + `",
                         "schema": {
                             "$ref": "#/definitions/handler.LogoutResponse"
                         }
                     },
                     "400": {
-                        "description": "Ошибка при выполнении выхода",
+                        "description": "ошибка запроса\" example:\"ошибка запроса",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "401": {
-                        "description": "Пользователь не авторизован",
+                        "description": "пользователь не авторизован\" example:\"не авторизован",
                         "schema": {
                             "type": "string"
                         }
@@ -121,7 +118,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Извлекает GUID (UUID) пользователя из JWT-токена",
+                "description": "Извлекает GUID (UUID) пользователя из JWT-токена. Пример запроса: GET /api-auth/me с заголовком Authorization: Bearer \u003caccess_token\u003e",
                 "produces": [
                     "application/json"
                 ],
@@ -141,13 +138,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Успешный ответ\" example:` + "`" + `{\"user_guid\": \"123e4567-e89b-12d3-a456-426614174000\"}` + "`" + `",
                         "schema": {
                             "$ref": "#/definitions/handler.CurrentUserResponse"
                         }
                     },
                     "401": {
-                        "description": "Пользователь не авторизован",
+                        "description": "Пользователь не авторизован или токен недействителен\" example:\"не авторизован",
                         "schema": {
                             "type": "string"
                         }
@@ -162,7 +159,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Обновляет пару JWT-токенов по refresh-токену с проверкой IP и User-Agent",
+                "description": "Обновляет пару JWT-токенов по refresh-токену с проверкой IP и User-Agent. Пример запроса: POST /api-auth/refresh-token с заголовком Authorization: Bearer \u003caccess_token\u003e и телом {\"refresh_token\": \"\u003crefresh_token\u003e\"}",
                 "consumes": [
                     "application/json"
                 ],
@@ -194,19 +191,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "успешное обновление токенов\" example:` + "`" + `{\"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\", \"refresh_token\": \"vcSi0369y1I62wOpxZFpgZ......\"}` + "`" + `",
                         "schema": {
-                            "$ref": "#/definitions/handler.TokensPair"
+                            "$ref": "#/definitions/model.TokensPair"
                         }
                     },
                     "400": {
-                        "description": "Неверный формат данных",
+                        "description": "неверный JSON в теле запроса\" example:\"неверный json",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "401": {
-                        "description": "Недействительный токен",
+                        "description": "не удалось обновить токены\" example:\"не удалось обновить токены",
                         "schema": {
                             "type": "string"
                         }
@@ -220,7 +217,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "userGUID": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "123e4567-e89b-12d3-a456-426614174000"
                 }
             }
         },
@@ -242,7 +240,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.TokensPair": {
+        "model.TokensPair": {
             "type": "object",
             "properties": {
                 "accessToken": {

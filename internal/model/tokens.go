@@ -12,7 +12,14 @@ type RefreshToken struct {
 	IpAddress string    `db:"ip_address"`
 }
 
+// TokensPair содержит пару access и refresh токенов
+// swagger:model
 type TokensPair struct {
-	AccessToken  string
-	RefreshToken string
+	// Access токен (JWT)
+	// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+	AccessToken string `json:"accessToken"`
+
+	// Refresh токен (для получения новой пары)
+	// example: vcSi0369y1I62wOpxZFpgZ...
+	RefreshToken string `json:"refreshToken"`
 }
