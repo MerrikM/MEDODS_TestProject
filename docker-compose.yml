@@ -1,6 +1,18 @@
 version: '3.8'
 
 services:
+  auth_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth_service
+    ports:
+      - "8090:8090"
+    depends_on:
+      - db
+    restart: unless-stopped
+    volumes:
+      - ./config-docker.yaml:/config.yaml
   db:
     image: postgres:16
     container_name: my-postgres
