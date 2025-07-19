@@ -56,7 +56,7 @@ func main() {
 
 	router.Route("/api-auth", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
-			r.Use(security.JWTMiddleware([]byte(cfg.JWT.SecretKey), jwtRepository))
+			r.Use(security.JWTMiddleware([]byte(cfg.JWT.SecretKey), jwtRepository, jwtService))
 			r.Get("/me", authenticationHandler.GetCurrentUsersUUID)
 			r.Post("/refresh-token", authenticationHandler.RefreshToken)
 			r.Post("/logout", authenticationHandler.Logout)

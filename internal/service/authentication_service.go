@@ -4,22 +4,22 @@ import (
 	"MEDODS_TestProject/config"
 	"MEDODS_TestProject/internal/model"
 	"MEDODS_TestProject/internal/notifier"
-	"MEDODS_TestProject/internal/repository"
-	"MEDODS_TestProject/internal/security"
+	"MEDODS_TestProject/internal/ports"
 	"context"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthenticationService struct {
-	*repository.JWTRepository
+	JWTRepository ports.JWTRepositoryInterface
 	*config.Config
-	*security.JWTService
+	JWTService ports.JWTServiceInterface
 }
 
-func NewAuthenticationService(repo *repository.JWTRepository, cfg *config.Config, service *security.JWTService) *AuthenticationService {
+func NewAuthenticationService(repo ports.JWTRepositoryInterface, cfg *config.Config, service ports.JWTServiceInterface) *AuthenticationService {
 	return &AuthenticationService{repo, cfg, service}
 }
 
@@ -53,7 +53,7 @@ func NewAuthenticationService(repo *repository.JWTRepository, cfg *config.Config
 //   - model.TokensPair
 //   - ошибку, если не удалось обновить токен.
 func (service *AuthenticationService) RefreshToken(ctx context.Context, userAgent string, ipAddress string, accessToken string, refreshToken string) (*model.TokensPair, error) {
-	claims, err := security.ValidateJWT(accessToken, []byte(service.Config.JWT.SecretKey))
+	claims, err := service.JWTService.ValidateJWT(accessToken, []byte(service.Config.JWT.SecretKey))
 	if err != nil {
 		return nil, fmt.Errorf("не удалось провалидировать токен: %w", err)
 	}
@@ -76,7 +76,7 @@ func (service *AuthenticationService) RefreshToken(ctx context.Context, userAgen
 		return nil, fmt.Errorf("обновление токена запрещено. User-Agent был изменен")
 	}
 	if storedRefreshToken.IpAddress != ipAddress {
-		log.Printf("обнаружен вход с нового устройства, отправка webhook")
+		log.Printf("обнаружен вход с нового ip адреса, отправка webhook")
 		go func() {
 			if err := notifier.NotifyWebhook(service.Config.Webhook.URL, userUUID, ipAddress, storedRefreshToken.IpAddress); err != nil {
 				log.Printf("ошибка отправки webhook: %v", err)

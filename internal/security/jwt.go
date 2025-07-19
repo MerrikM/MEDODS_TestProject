@@ -8,13 +8,14 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Claims struct {
@@ -93,7 +94,7 @@ func GenerateRefreshToken() (*model.RefreshToken, string, error) {
 	}, refreshTokenStr, nil
 }
 
-func ValidateJWT(jwtTokenStr string, secretKey []byte) (*Claims, error) {
+func (service *JWTService) ValidateJWT(jwtTokenStr string, secretKey []byte) (*Claims, error) {
 	var claims = &Claims{}
 
 	jwtToken, err := jwt.ParseWithClaims(jwtTokenStr, claims, func(token *jwt.Token) (interface{}, error) {
@@ -110,13 +111,13 @@ func ValidateJWT(jwtTokenStr string, secretKey []byte) (*Claims, error) {
 	return claims, nil
 }
 
-func JWTMiddleware(secretKey []byte, jwtRepository *repository.JWTRepository) func(handler http.Handler) http.Handler {
+func JWTMiddleware(secretKey []byte, jwtRepository *repository.JWTRepository, jwtService *JWTService) func(handler http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(handleAuthentication(secretKey, jwtRepository, next))
+		return http.HandlerFunc(handleAuthentication(secretKey, jwtRepository, jwtService, next))
 	}
 }
 
-func handleAuthentication(secretKey []byte, jwtRepository *repository.JWTRepository, next http.Handler) func(writer http.ResponseWriter, request *http.Request) {
+func handleAuthentication(secretKey []byte, jwtRepository *repository.JWTRepository, jwtService *JWTService, next http.Handler) func(writer http.ResponseWriter, request *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		authorizationHeader := request.Header.Get("Authorization")
 		if strings.HasPrefix(authorizationHeader, "Bearer ") == false {
@@ -126,7 +127,7 @@ func handleAuthentication(secretKey []byte, jwtRepository *repository.JWTReposit
 
 		jwtTokenStr := strings.TrimPrefix(authorizationHeader, "Bearer ")
 
-		claims, err := ValidateJWT(jwtTokenStr, secretKey)
+		claims, err := jwtService.ValidateJWT(jwtTokenStr, secretKey)
 		if err != nil {
 			log.Printf("невалидный токен: %v", err)
 			http.Error(writer, "невалидный токен", http.StatusUnauthorized)
