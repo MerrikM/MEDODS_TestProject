@@ -61,7 +61,7 @@ go run main.go
 Для запуска в Docker:
 1. Настройте `config-docker.yaml`.
 
-Для запуска приложения и базы данных с помощью Docker Compose:
+Для запуска приложения и базы данных с помощью Docker Compose, в Docker перейдите в директорию проекта и выполните:
 ```bash
 docker-compose -f docker-compose.yml up -d
 ```
